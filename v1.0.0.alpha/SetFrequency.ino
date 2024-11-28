@@ -30,10 +30,7 @@ void setup() {
 
   TC2->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG | TC_CCR_CLKEN; // Enable the timer TC6 (TC2 Channel 0)
   TC2->TC_CHANNEL[1].TC_CCR = TC_CCR_SWTRG | TC_CCR_CLKEN; // Enable the timer TC7 (TC2 Channel 1)
-  for(int i=3;i<9;i++)
-    pinMode(i,OUTPUT);
-  for(int i=11;i<13;i++)
-    pinMode(i,OUTPUT);
+  
 }
 
 void loop() {
