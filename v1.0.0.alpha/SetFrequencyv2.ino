@@ -3,6 +3,7 @@
 
 const int E1 = 5;
 const int E2 = 10;
+const int M1 = 22;
 
 void PWMChannelSetup() {
   PMC->PMC_PCER1 |= PMC_PCER1_PID34 | PMC_PCER1_PID33;    // Enable peripheral TC6 (TC2 Channel 0) and TC7 (TC2 Channel 1)
@@ -43,6 +44,6 @@ void setup() {
 
 void loop() {
   // loop code goes here
-  PWMSetup(50,10);
+  PWMSetup(75,10);
   
 }
