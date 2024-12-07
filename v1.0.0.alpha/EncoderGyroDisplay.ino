@@ -13,8 +13,8 @@ const int E2 = 10; /// Motor2 Speed
 /* For Directional Control, its always moving forward. Therefore, we already put one of our white wires into Ground to Reset it to LOW setting */
 
 // Encoder Pins
-const byte enA = 19; /// Motor 1 Encoder
-const byte enB = 18; /// Motor2 Encoder
+const byte enA = 18; /// Motor 1 Encoder (D5 Motor) and Right
+const byte enB = 2; /// Motor 2 Encoder (D10 Motor) and Left
 
 
 // Counters
@@ -61,17 +61,24 @@ float currentAngle = 0;
 float target = 0;
 int targetIterator = 0;
 
+// OLED Conenctions
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define SWITCH_PIN 7
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Gyro Connections
 
-#define BNO08X_CS 36
-#define BNO08X_INT 32
+#define BNO08X_CS 34
+#define BNO08X_INT 30
 
 
 // #define FAST_MODE
 
 // For SPI mode, we also need a RESET 
-#define BNO08X_RESET 34
+#define BNO08X_RESET 32
 // but not for I2C or UART
 // #define BNO08X_RESET -1
 
@@ -152,7 +159,7 @@ void targetAngle() {
 void AngleMeasure(int time) {
   lasttime = micros();
   thistime = micros();
-  while (thistime - lasttime < time) {
+  while (thistime - lasttime < (time*1000000)) {
     if (bno08x.wasReset()) {
       setReports(reportType, reportIntervalUs);
     }
@@ -182,7 +189,6 @@ void AngleMeasure(int time) {
     delay(10);
   }
   thistime = micros();
-  stopWait();
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
@@ -194,12 +200,6 @@ void AngleMeasure(int time) {
   display.display();
 }
 
-// OLED Conenctions
-
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Encoder Functions
 
@@ -224,6 +224,238 @@ int CMtoSteps(float cm) {
 
 }
 
+// PWM Frequency Functions
+void PWMChannelSetup() {
+  PMC->PMC_PCER1 |= PMC_PCER1_PID34 | PMC_PCER1_PID33;    // Enable peripheral TC6 (TC2 Channel 0) and TC7 (TC2 Channel 1)
+  PIOC->PIO_ABSR |= PIO_ABSR_P29 | PIO_ABSR_P25;          // Switch the multiplexer to peripheral B for TIOA6 (D5) and TIOB7 (D10)
+  PIOC->PIO_PDR |= PIO_PDR_P29 | PIO_PDR_P25;             // Disable the GPIO on the corresponding pins
+
+  TC2->TC_CHANNEL[0].TC_CMR = TC_CMR_ACPC_SET |           // Set TIOA on counter match with RC0                           
+                              TC_CMR_ACPA_CLEAR |         // Clear TIOA on counter match with RA0
+                              TC_CMR_WAVE |               // Enable wave mode
+                              TC_CMR_WAVSEL_UP_RC |       // Count up with automatic trigger on RC compare
+                              TC_CMR_EEVT_XC0 |           // Set event selection to XC0 to make TIOB an output
+                              TC_CMR_TCCLKS_TIMER_CLOCK1; // Set the timer clock to TCLK1 (MCK/2 = 84MHz/2 = 42MHz)
+
+  TC2->TC_CHANNEL[1].TC_CMR = TC_CMR_BCPC_SET |           // Set TIOB on counter match with RC0                              
+                              TC_CMR_BCPB_CLEAR |         // Clear TIOB on counter match with RB0                             
+                              TC_CMR_WAVE |               // Enable wave mode
+                              TC_CMR_WAVSEL_UP_RC |       // Count up with automatic trigger on RC compare
+                              TC_CMR_EEVT_XC0 |           // Set event selection to XC0 to make TIOB an output
+                              TC_CMR_TCCLKS_TIMER_CLOCK1; // Set the timer clock to TCLK1 (MCK/2 = 84MHz/2 = 42MHz)
+
+  TC2->TC_CHANNEL[0].TC_RC = 2100;                        // Set the PWM frequency to 15kHz: 42MHz / 20kHz = 2100 
+  TC2->TC_CHANNEL[1].TC_RC = 2100;                        // Set the PWM frequency to 15kHz: 42MHz / 20kHz = 2100
+
+  TC2->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG | TC_CCR_CLKEN; // Enable the timer TC6 (TC2 Channel 0)
+  TC2->TC_CHANNEL[1].TC_CCR = TC_CCR_SWTRG | TC_CCR_CLKEN; // Enable the timer TC7 (TC2 Channel 1)
+}
+
+void PWMASetup(float percent) {
+  TC2->TC_CHANNEL[0].TC_RA = 2100 * (percent/100);
+}
+
+void PWMBSetup(float percent) {
+  TC2->TC_CHANNEL[1].TC_RB = 2100 * (percent/100);
+}
+
+void enACounts(float counts) {
+  counter_A = 0;
+  while (counter_A < counts) {
+    PWMASetup(90);
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.print(" Counter A: ");
+    display.println(counter_A);
+    display.print(" Task: ");
+    display.println("In Progress");
+    display.display();
+  }
+  PWMASetup(100);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.print(" Counter A: ");
+  display.println(counter_A);
+  display.print(" Task: ");
+  display.println("Done");
+  display.display();
+}
+
+void enBCounts(float counts) {
+  counter_B = 0;
+  while (counter_B < counts) {
+    PWMBSetup(90);
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.print(" Counter B: ");
+    display.println(counter_B);
+    display.print(" Task: ");
+    display.println("In Progress");
+    display.display();
+  }
+  PWMBSetup(100);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.print(" Counter B: ");
+  display.println(counter_B);
+  display.print(" Task: ");
+  display.println("Done");
+  display.display();
+}
+void PDTIME(int time, int power, float gained) {
+  counter_A = 0;
+  counter_B = 0;
+  targetAngle();
+  lasttime = micros();
+  thistime = micros();
+  while (thistime - lasttime < time) {
+    if (bno08x.wasReset()) {
+      setReports(reportType, reportIntervalUs);
+    }
+  
+    if (bno08x.getSensorEvent(&sensorValue)) {
+      // in this demo only one report type will be received depending on FAST_MODE define (above)
+      switch (sensorValue.sensorId) {
+        case SH2_ARVR_STABILIZED_RV:
+          quaternionToEulerRV(&sensorValue.un.arvrStabilizedRV, &ypr, true);
+        case SH2_GYRO_INTEGRATED_RV:
+          // faster (more noise?)
+          quaternionToEulerGI(&sensorValue.un.gyroIntegratedRV, &ypr, true);
+          break;
+      }
+    }
+    currentAngle = float(ypr.yaw);
+    thecorrection = target - currentAngle;
+    powerA = power + (gained * thecorrection);
+    powerB = power - (gained * thecorrection);
+    PWMASetup(powerA);
+    PWMBSetup(powerB);
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.print(" Expect: ");
+    display.println(target);
+    display.print(" Currnt: ");
+    display.println(currentAngle);
+    display.print(" PowerA: ");
+    display.println(powerA);
+    display.print(" PowerB: ");
+    display.println(powerB);
+    display.print(" Time: ");
+    display.println(abs(thistime-lasttime));
+    display.print(" Ang Diff: ");
+    display.println(abs(target-currentAngle));
+    display.display();
+    thistime = micros();
+	  delay(10);
+    } 
+  thistime = micros();
+  PWMASetup(0);
+  PWMBSetup(0);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.print(" Expect: ");
+  display.println(target);
+  display.print(" Currnt: ");
+  display.println(currentAngle);
+  display.print(" PowerA: ");
+  display.println(powerA);
+  display.print(" PowerB: ");
+  display.println(powerB);
+  display.print(" Ang Diff: ");
+  display.println(abs(target-currentAngle));
+  display.print(" Time: ");
+  display.println(abs(thistime-lasttime));
+  display.display();
+}
+
+void PD(int thesteps, int percent, float gained) {
+  counter_A = 0;
+  counter_B = 0;
+  targetAngle();
+  lasttime = micros();
+  while (counter_A + counter_B < (thesteps * 2)) {
+    if (bno08x.wasReset()) {
+      setReports(reportType, reportIntervalUs);
+    }
+    if (bno08x.getSensorEvent(&sensorValue)) {
+      // in this demo only one report type will be received depending on FAST_MODE define (above)
+      switch (sensorValue.sensorId) {
+        case SH2_ARVR_STABILIZED_RV:
+          quaternionToEulerRV(&sensorValue.un.arvrStabilizedRV, &ypr, true);
+        case SH2_GYRO_INTEGRATED_RV:
+          // faster (more noise?)
+          quaternionToEulerGI(&sensorValue.un.gyroIntegratedRV, &ypr, true);
+          break;
+      }
+    }
+    currentAngle = float(ypr.yaw);
+    thecorrection = target - currentAngle;
+    powerA = percent - (gained * thecorrection);
+    powerB = percent + (gained * thecorrection);
+    PWMASetup(powerA);
+    PWMBSetup(powerB);
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.print(" Expect: ");
+    display.println(target);
+    display.print(" Currnt: ");
+    display.println(currentAngle);
+    display.print(" PowerA: ");
+    display.println(powerA);
+    display.print(" PowerB: ");
+    display.println(powerB);
+    display.print(" Pulses: ");
+    display.println(thesteps);
+    display.print(" Count A: ");
+    display.println(counter_A);
+    display.print(" Count B: ");
+    display.println(counter_B);
+    display.print(" Ang Diff: ");
+    display.println(abs(target-currentAngle));
+    display.display();
+	  delay(10);
+    } 
+  thistime = micros();
+  PWMASetup(100);
+  PWMBSetup(100);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.print(" Expect: ");
+  display.println(target);
+  display.print(" Currnt: ");
+  display.println(currentAngle);
+  display.print(" PowerA: ");
+  display.println(powerA);
+  display.print(" PowerB: ");
+  display.println(powerB);
+  display.print(" Pulses: ");
+  display.println(thesteps);
+  display.print(" Count A: ");
+  display.println(counter_A);
+  display.print(" Count B: ");
+  display.println(counter_B);
+  display.print(" Ang Diff: ");
+  display.println(abs(target-currentAngle));
+  display.print(" Time: ");
+  display.println(abs(thistime-lasttime));
+  display.display();
+}
 // Void Setup
 
 void setup() {
@@ -237,12 +469,48 @@ void setup() {
     Serial.println(F("SSD1306 allocation failed"));
     for (;;);
   }
+  /*
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println(F("Serial Has Started"));
+  display.println(F("Wire Has Started"));
+  display.println(F("Interrupts Has Started"));
+  display.println(F("Display Condition Has Started"));
+  display.display();
+  delay(2000);
+  */
   pinMode(enA, INPUT_PULLUP);
   pinMode(enB, INPUT_PULLUP);
-  for(int i=3;i<9;i++)
-    pinMode(i,OUTPUT);
-  for(int i=11;i<13;i++)
-    pinMode(i,OUTPUT);
+  /*
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println(F("pinMode Has Started"));
+  display.display();
+  delay(2000);
+  */
+  /*
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println(F("pinMode #2 Has Started"));
+  display.display();
+  delay(2000);
+  */
+  PWMChannelSetup();
+  /*
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println(F("PWM channel Setup!"));
+  display.display();
+  delay(2000);
+  */
   if (!bno08x.begin_SPI(BNO08X_CS, BNO08X_INT)) {
     while (1) { delay(10); }
   }
@@ -256,10 +524,31 @@ void setup() {
   display.println(F("Code will run shortly..."));
   display.display();
   delay(2500);
-  targetAngle();
+  /*
+  PWMASetup(1); // Right
+  PWMBSetup(15); // Left
+  delay(2000);
+  PWMASetup(75);
+  PWMBSetup(75);
+  delay(1500);
+  PWMASetup(100);
+  PWMBSetup(100);
+  delay(250);*/
+  // PD(180,50,5.13);
+
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-
+  PWMASetup(50);
+  PWMBSetup(50);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.print(" Count A: ");
+  display.println(counter_A);
+  display.print(" Count B: ");
+  display.println(counter_B);
+  display.display();
 }
