@@ -13,8 +13,8 @@ const int E2 = 10; /// Motor2 Speed
 /* For Directional Control, its always moving forward. Therefore, we already put one of our white wires into Ground to Reset it to LOW setting */
 
 // Encoder Pins
-const byte enA = 18; /// Motor 1 Encoder (D5 Motor) and Right
-const byte enB = 2; /// Motor 2 Encoder (D10 Motor) and Left
+const byte enA = 2; /// Motor 1 Encoder (D5 Motor) and Right
+const byte enB = 3; /// Motor 2 Encoder (D10 Motor) and Left
 
 
 // Counters
@@ -469,48 +469,10 @@ void setup() {
     Serial.println(F("SSD1306 allocation failed"));
     for (;;);
   }
-  /*
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println(F("Serial Has Started"));
-  display.println(F("Wire Has Started"));
-  display.println(F("Interrupts Has Started"));
-  display.println(F("Display Condition Has Started"));
-  display.display();
-  delay(2000);
-  */
+  delay(100);
   pinMode(enA, INPUT_PULLUP);
   pinMode(enB, INPUT_PULLUP);
-  /*
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println(F("pinMode Has Started"));
-  display.display();
-  delay(2000);
-  */
-  /*
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println(F("pinMode #2 Has Started"));
-  display.display();
-  delay(2000);
-  */
   PWMChannelSetup();
-  /*
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println(F("PWM channel Setup!"));
-  display.display();
-  delay(2000);
-  */
   if (!bno08x.begin_SPI(BNO08X_CS, BNO08X_INT)) {
     while (1) { delay(10); }
   }
