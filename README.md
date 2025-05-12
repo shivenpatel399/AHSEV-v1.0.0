@@ -1,6 +1,6 @@
-# American High School Electric Vehicle
+# American High School EV
 ----------------------
-All the resources used from the American High School Electric Vehicle Seasons (Codes, Logic, Files, Libraries, etc.)
+All the resources used from the American High School EV Seasons (Codes, Logic, Files, Libraries, etc.)
 
 **Written by Shiven Patel**
 
@@ -20,6 +20,10 @@ C++ is used under Arduino IDE
 PD/PID logic used
 
 **Only works with Arduino Due**
+
+## Credibility
+----------------------
+Ranked 4th in States and Regionals
 
 
 
